@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Plus,
   Pencil,
@@ -10,7 +10,16 @@ import {
   CheckCircle2,
   Hourglass,
   XCircle,
+  Phone,
 } from 'lucide-react'
+import {
+  type Appointment,
+  type AppointmentStatus,
+  getAppointments,
+  seedAppointmentsIfEmpty,
+  subscribeToAppointments,
+  updateAppointmentStatus,
+} from '../lib/appointments'
 
 interface Service {
   id: number
@@ -24,17 +33,6 @@ interface WorkingHour {
   open: string
   close: string
   closed: boolean
-}
-
-type AppointmentStatus = 'Onaylandı' | 'Bekliyor' | 'İptal'
-
-interface Appointment {
-  id: number
-  customer: string
-  service: string
-  date: string
-  time: string
-  status: AppointmentStatus
 }
 
 const initialServices: Service[] = [
@@ -54,9 +52,39 @@ const initialHours: WorkingHour[] = [
 ]
 
 const initialAppointments: Appointment[] = [
-  { id: 1, customer: 'Ahmet Yılmaz', service: 'Saç Kesimi', date: '2026-09-04', time: '10:30', status: 'Onaylandı' },
-  { id: 2, customer: 'Mehmet Demir', service: 'Saç + Sakal', date: '2026-09-04', time: '14:00', status: 'Bekliyor' },
-  { id: 3, customer: 'Can Öztürk', service: 'Sakal Tıraşı', date: '2026-09-05', time: '11:15', status: 'İptal' },
+  {
+    id: 'seed-1',
+    customer: 'Ahmet Yılmaz',
+    phone: '05551112233',
+    service: 'Saç Kesimi',
+    price: 250,
+    date: '2026-09-04',
+    time: '10:30',
+    status: 'Onaylandı',
+    createdAt: '2026-09-01T10:00:00.000Z',
+  },
+  {
+    id: 'seed-2',
+    customer: 'Mehmet Demir',
+    phone: '05554445566',
+    service: 'Saç + Sakal',
+    price: 350,
+    date: '2026-09-04',
+    time: '14:00',
+    status: 'Bekliyor',
+    createdAt: '2026-09-01T11:00:00.000Z',
+  },
+  {
+    id: 'seed-3',
+    customer: 'Can Öztürk',
+    phone: '05557778899',
+    service: 'Sakal Tıraşı',
+    price: 150,
+    date: '2026-09-05',
+    time: '11:15',
+    status: 'İptal',
+    createdAt: '2026-09-01T12:00:00.000Z',
+  },
 ]
 
 const statusStyles: Record<AppointmentStatus, string> = {
@@ -74,7 +102,19 @@ const statusIcons: Record<AppointmentStatus, typeof CheckCircle2> = {
 export default function BerberAdmin() {
   const [services, setServices] = useState<Service[]>(initialServices)
   const [hours, setHours] = useState<WorkingHour[]>(initialHours)
-  const [appointments] = useState<Appointment[]>(initialAppointments)
+  const [appointments, setAppointments] = useState<Appointment[]>([])
+
+  useEffect(() => {
+    seedAppointmentsIfEmpty(initialAppointments)
+    setAppointments(getAppointments())
+
+    return subscribeToAppointments(() => setAppointments(getAppointments()))
+  }, [])
+
+  const handleStatusChange = (id: string, status: AppointmentStatus) => {
+    updateAppointmentStatus(id, status)
+    setAppointments(getAppointments())
+  }
 
   const [editingId, setEditingId] = useState<number | null>(null)
   const [draft, setDraft] = useState<{ name: string; price: string; duration: string }>({
@@ -282,14 +322,16 @@ export default function BerberAdmin() {
       <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="mb-4 text-lg font-semibold text-slate-900">Gelen Randevular</h2>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[600px] text-left text-sm">
+          <table className="w-full min-w-[720px] text-left text-sm">
             <thead>
               <tr className="border-b border-slate-200 text-slate-500">
                 <th className="pb-3 font-medium">Müşteri</th>
+                <th className="pb-3 font-medium">Telefon</th>
                 <th className="pb-3 font-medium">Hizmet</th>
                 <th className="pb-3 font-medium">Tarih</th>
                 <th className="pb-3 font-medium">Saat</th>
                 <th className="pb-3 font-medium">Durum</th>
+                <th className="pb-3 font-medium">İşlem</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -298,7 +340,15 @@ export default function BerberAdmin() {
                 return (
                   <tr key={a.id} className="text-slate-700">
                     <td className="py-3 font-medium text-slate-900">{a.customer}</td>
-                    <td className="py-3">{a.service}</td>
+                    <td className="py-3">
+                      <span className="flex items-center gap-1.5 text-slate-500">
+                        <Phone size={13} />
+                        {a.phone}
+                      </span>
+                    </td>
+                    <td className="py-3">
+                      {a.service} <span className="text-slate-400">· {a.price} TL</span>
+                    </td>
                     <td className="py-3">{a.date}</td>
                     <td className="py-3">{a.time}</td>
                     <td className="py-3">
@@ -309,9 +359,36 @@ export default function BerberAdmin() {
                         {a.status}
                       </span>
                     </td>
+                    <td className="py-3">
+                      <div className="flex gap-1.5">
+                        <button
+                          type="button"
+                          disabled={a.status === 'Onaylandı'}
+                          onClick={() => handleStatusChange(a.id, 'Onaylandı')}
+                          className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          Onayla
+                        </button>
+                        <button
+                          type="button"
+                          disabled={a.status === 'İptal'}
+                          onClick={() => handleStatusChange(a.id, 'İptal')}
+                          className="rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-medium text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          İptal Et
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 )
               })}
+              {appointments.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="py-6 text-center text-sm text-slate-400">
+                    Henüz randevu bulunmuyor.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

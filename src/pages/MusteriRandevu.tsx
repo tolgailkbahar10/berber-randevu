@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Scissors, CalendarDays, Clock, MessageCircle, Check } from 'lucide-react'
+import { Scissors, CalendarDays, Clock, MessageCircle, Check, Phone } from 'lucide-react'
+import { addAppointment } from '../lib/appointments'
 
 interface Service {
   id: number
@@ -24,23 +25,40 @@ export default function MusteriRandevu() {
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
   const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [isSubmitted, setIsSubmitted] = useState(false)
 
   const selectedService = useMemo(
     () => services.find((s) => s.id === selectedServiceId) ?? null,
     [selectedServiceId]
   )
 
-  const isFormComplete = Boolean(selectedService && date && time && name.trim())
+  const isFormComplete = Boolean(selectedService && date && time && name.trim() && phone.trim())
 
-  const whatsappLink = useMemo(() => {
-    if (!selectedService || !date || !time) return '#'
+  const buildWhatsappLink = (service: Service) => {
     const message =
-      `Merhaba, ${name || 'Müşteriniz'} olarak randevu almak istiyorum.\n` +
-      `Hizmet: ${selectedService.name} (${selectedService.price} TL)\n` +
+      `Merhaba, ${name} olarak randevu almak istiyorum.\n` +
+      `Telefon: ${phone}\n` +
+      `Hizmet: ${service.name} (${service.price} TL)\n` +
       `Tarih: ${date}\n` +
       `Saat: ${time}`
     return `https://wa.me/${BERBER_WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`
-  }, [selectedService, date, time, name])
+  }
+
+  const handleWhatsappSubmit = () => {
+    if (!isFormComplete || !selectedService) return
+
+    addAppointment({
+      customer: name.trim(),
+      phone: phone.trim(),
+      service: selectedService.name,
+      price: selectedService.price,
+      date,
+      time,
+    })
+    setIsSubmitted(true)
+    window.open(buildWhatsappLink(selectedService), '_blank', 'noopener,noreferrer')
+  }
 
   const today = new Date().toISOString().split('T')[0]
 
@@ -63,6 +81,21 @@ export default function MusteriRandevu() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Örn: Ahmet Yılmaz"
+            className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+          />
+        </div>
+
+        {/* Phone */}
+        <div>
+          <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-slate-700">
+            <Phone size={15} />
+            Telefon Numaranız
+          </label>
+          <input
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="Örn: 05XX XXX XX XX"
             className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
           />
         </div>
@@ -151,14 +184,10 @@ export default function MusteriRandevu() {
         )}
 
         {/* CTA */}
-        <a
-          href={isFormComplete ? whatsappLink : undefined}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-disabled={!isFormComplete}
-          onClick={(e) => {
-            if (!isFormComplete) e.preventDefault()
-          }}
+        <button
+          type="button"
+          disabled={!isFormComplete}
+          onClick={handleWhatsappSubmit}
           className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3.5 text-base font-semibold text-white shadow-lg transition ${
             isFormComplete
               ? 'bg-emerald-600 shadow-emerald-200 hover:bg-emerald-700'
@@ -167,7 +196,13 @@ export default function MusteriRandevu() {
         >
           <MessageCircle size={20} />
           WhatsApp ile Randevu Al
-        </a>
+        </button>
+
+        {isSubmitted && (
+          <p className="text-center text-sm font-medium text-emerald-600">
+            Randevunuz kaydedildi! WhatsApp üzerinden berberinizle görüşmeye devam edin.
+          </p>
+        )}
       </div>
     </div>
   )
